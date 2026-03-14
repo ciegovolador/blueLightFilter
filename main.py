@@ -11,7 +11,7 @@ Run:  python3 main.py
 If tkinter is missing (rare):  sudo apt install python3-tk
 """
 
-from ui import App
+from bluelight import App
 
 
 if __name__ == "__main__":

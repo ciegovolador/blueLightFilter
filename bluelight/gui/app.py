@@ -1,13 +1,13 @@
 """Main GUI application for Blue Light Filter."""
 
 import tkinter as tk
-from constants import (BG, CARD, BORDER, FG, FG2, ACCENT, ACC2,
-                       RED, GREEN, BLUE, DARK, MONO, MONO_B, MONO_S,
-                       MONO_LG, PRESETS)
-from xrandr_utils import get_connected_output, apply_gamma, build_command, has_xrandr
-from color_utils import gamma_to_hex, warmth_label
-from slider import Slider
-from config import load_config, save_config
+from bluelight.theme import (BG, CARD, BORDER, FG, FG2, ACCENT, ACC2,
+                              RED, GREEN, BLUE, DARK, MONO, MONO_B, MONO_S,
+                              MONO_LG, PRESETS)
+from bluelight.display import get_connected_output, apply_gamma, build_command, has_xrandr
+from bluelight.color import gamma_to_hex, warmth_label
+from bluelight.gui.slider import Slider
+from bluelight.config import load_config, save_config
 
 
 class App(tk.Tk):
@@ -133,32 +133,27 @@ class App(tk.Tk):
         """Build action buttons."""
         bf = tk.Frame(self, bg=BG)
         bf.pack(fill="x", padx=22, pady=(10, 6))
-        tk.Button(bf, text="  Apply Now",
-                  font=MONO_B, bg=ACCENT, fg="#1a0900",
-                  activebackground=ACC2, activeforeground="#1a0900",
-                  relief="flat", bd=0, padx=18, pady=10, cursor="hand2",
-                  command=self._apply).pack(side="left", fill="x", expand=True, padx=(0, 6))
-        tk.Button(bf, text="Save Permanently",
-                  font=MONO_B, bg=CARD, fg=FG2,
-                  activebackground=BORDER, activeforeground=FG,
-                  relief="flat", bd=0,
-                  highlightthickness=1, highlightbackground=BORDER,
-                  padx=14, pady=10, cursor="hand2",
-                  command=self._save_permanent).pack(side="left", padx=(0, 6))
-        tk.Button(bf, text="Reset",
-                  font=MONO_B, bg=CARD, fg=FG2,
-                  activebackground=BORDER, activeforeground=FG,
-                  relief="flat", bd=0,
-                  highlightthickness=1, highlightbackground=BORDER,
-                  padx=14, pady=10, cursor="hand2",
-                  command=self._reset).pack(side="left", padx=(0, 6))
-        tk.Button(bf, text="Copy CMD",
-                  font=MONO_B, bg=CARD, fg=FG2,
-                  activebackground=BORDER, activeforeground=FG,
-                  relief="flat", bd=0,
-                  highlightthickness=1, highlightbackground=BORDER,
-                  padx=14, pady=10, cursor="hand2",
-                  command=self._copy).pack(side="left")
+        self._btn(bf, "  Apply Now", self._apply, primary=True
+                  ).pack(side="left", fill="x", expand=True, padx=(0, 6))
+        self._btn(bf, "Save Permanently", self._save_permanent
+                  ).pack(side="left", padx=(0, 6))
+        self._btn(bf, "Reset", self._reset).pack(side="left", padx=(0, 6))
+        self._btn(bf, "Copy CMD", self._copy).pack(side="left")
+
+    def _btn(self, parent, text, command, primary=False):
+        """Create a styled button."""
+        if primary:
+            return tk.Button(parent, text=text, font=MONO_B,
+                             bg=ACCENT, fg="#1a0900",
+                             activebackground=ACC2, activeforeground="#1a0900",
+                             relief="flat", bd=0, padx=18, pady=10,
+                             cursor="hand2", command=command)
+        return tk.Button(parent, text=text, font=MONO_B,
+                         bg=CARD, fg=FG2,
+                         activebackground=BORDER, activeforeground=FG,
+                         relief="flat", bd=0,
+                         highlightthickness=1, highlightbackground=BORDER,
+                         padx=14, pady=10, cursor="hand2", command=command)
 
     def _build_status(self):
         """Build status message label."""
@@ -203,8 +198,7 @@ class App(tk.Tk):
         self._r = self._sl_r.get()
         self._g = self._sl_g.get()
         self._b = self._sl_b.get()
-        for btn in self._pbtns:
-            btn.config(bg=CARD, fg=FG2, highlightbackground=BORDER)
+        self._highlight_preset(-1)
         self._refresh()
 
     def _refresh(self):
@@ -225,12 +219,16 @@ class App(tk.Tk):
         self._rl.config(text=f"{r:.2f}")
         self._gl.config(text=f"{g:.2f}")
         self._bl.config(text=f"{b:.2f}")
+        self._highlight_preset(idx)
+        self._refresh()
+
+    def _highlight_preset(self, idx):
+        """Highlight the active preset button, reset others."""
         for i, btn in enumerate(self._pbtns):
             if i == idx:
                 btn.config(bg=ACCENT, fg="#1a0900", highlightbackground=ACCENT)
             else:
                 btn.config(bg=CARD, fg=FG2, highlightbackground=BORDER)
-        self._refresh()
 
     def _apply(self):
         """Apply filter to connected display."""

@@ -1,14 +1,11 @@
 """Custom Canvas-based horizontal slider widget."""
 
 import tkinter as tk
-from constants import CARD, BG
+from bluelight.theme import CARD, BG
 
 
 class Slider(tk.Canvas):
-    """Smooth horizontal slider drawn entirely with Canvas.
-
-    Uses no external dependencies beyond tkinter.
-    """
+    """Smooth horizontal slider drawn entirely with Canvas."""
 
     def __init__(self, master, from_=0.0, to=1.0, value=1.0,
                  thumb_color="#ffffff", on_change=None, **kw):
