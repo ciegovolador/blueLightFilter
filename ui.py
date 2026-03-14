@@ -7,6 +7,7 @@ from constants import (BG, CARD, BORDER, FG, FG2, ACCENT, ACC2,
 from xrandr_utils import get_connected_output, apply_gamma, build_command, has_xrandr
 from color_utils import gamma_to_hex, warmth_label
 from slider import Slider
+from config import load_config, save_config
 
 
 class App(tk.Tk):
@@ -20,9 +21,18 @@ class App(tk.Tk):
 
         self.output = get_connected_output()
         self.has_xr = has_xrandr()
-        self._r, self._g, self._b = 1.00, 0.85, 0.65
+
+        # Load saved settings or use defaults
+        saved = load_config()
+        self._r = saved.get('r', 1.00)
+        self._g = saved.get('g', 0.85)
+        self._b = saved.get('b', 0.65)
 
         self._build()
+
+        # Auto-apply saved settings on startup
+        if saved and self.has_xr and self.output:
+            apply_gamma(self.output, self._r, self._g, self._b)
 
     # ── UI Construction ───────────────────────────────────────────────────────
 
@@ -128,6 +138,13 @@ class App(tk.Tk):
                   activebackground=ACC2, activeforeground="#1a0900",
                   relief="flat", bd=0, padx=18, pady=10, cursor="hand2",
                   command=self._apply).pack(side="left", fill="x", expand=True, padx=(0, 6))
+        tk.Button(bf, text="Save Permanently",
+                  font=MONO_B, bg=CARD, fg=FG2,
+                  activebackground=BORDER, activeforeground=FG,
+                  relief="flat", bd=0,
+                  highlightthickness=1, highlightbackground=BORDER,
+                  padx=14, pady=10, cursor="hand2",
+                  command=self._save_permanent).pack(side="left", padx=(0, 6))
         tk.Button(bf, text="Reset",
                   font=MONO_B, bg=CARD, fg=FG2,
                   activebackground=BORDER, activeforeground=FG,
@@ -239,6 +256,13 @@ class App(tk.Tk):
         self.clipboard_clear()
         self.clipboard_append(cmd)
         self._flash("  Command copied to clipboard!")
+
+    def _save_permanent(self):
+        """Save current gamma settings permanently."""
+        if save_config(self._r, self._g, self._b):
+            self._flash("  Settings saved permanently!", GREEN)
+        else:
+            self._flash("  Failed to save settings", RED)
 
     def _flash(self, msg, color=GREEN):
         """Show temporary status message."""
