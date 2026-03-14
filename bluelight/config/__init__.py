@@ -1,7 +1,6 @@
 """Configuration file management for Blue Light Filter."""
 
 import json
-import os
 from pathlib import Path
 
 
@@ -9,15 +8,16 @@ CONFIG_DIR = Path.home() / ".config" / "bluelight"
 CONFIG_FILE = CONFIG_DIR / "settings.json"
 
 
-def load_config():
+def load_config(path=None):
     """Load saved gamma settings from config file.
 
     Returns:
         dict: {'r': float, 'g': float, 'b': float} or empty dict if not found.
     """
-    if CONFIG_FILE.exists():
+    cfg = Path(path) if path else CONFIG_FILE
+    if cfg.exists():
         try:
-            with open(CONFIG_FILE, 'r') as f:
+            with open(cfg, 'r') as f:
                 data = json.load(f)
                 return {
                     'r': float(data.get('r', 1.0)),
@@ -29,20 +29,16 @@ def load_config():
     return {}
 
 
-def save_config(r, g, b):
+def save_config(r, g, b, path=None):
     """Save gamma settings to config file.
-
-    Args:
-        r (float): Red gamma value.
-        g (float): Green gamma value.
-        b (float): Blue gamma value.
 
     Returns:
         bool: True if saved successfully.
     """
+    cfg = Path(path) if path else CONFIG_FILE
     try:
-        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        with open(CONFIG_FILE, 'w') as f:
+        cfg.parent.mkdir(parents=True, exist_ok=True)
+        with open(cfg, 'w') as f:
             json.dump({'r': round(r, 2), 'g': round(g, 2), 'b': round(b, 2)}, f)
         return True
     except Exception:
