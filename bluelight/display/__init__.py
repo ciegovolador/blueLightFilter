@@ -4,16 +4,6 @@ import subprocess
 import shutil
 
 
-def get_connected_output():
-    """Detect the first connected display output name.
-
-    Returns:
-        str or None: Output name (e.g., "HDMI-1") or None if not found.
-    """
-    outputs = get_connected_outputs()
-    return outputs[0] if outputs else None
-
-
 def get_connected_outputs():
     """Detect all connected display output names.
 
@@ -37,14 +27,9 @@ def apply_gamma(output, r, g, b):
     subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def gamma_string(r, g, b):
-    """Format RGB gamma values as colon-separated string."""
-    return f"{r:.2f}:{g:.2f}:{b:.2f}"
-
-
 def build_command(output, r, g, b):
     """Generate xrandr command string."""
-    return f"xrandr --output {output} --gamma {gamma_string(r, g, b)}"
+    return f"xrandr --output {output} --gamma {r:.2f}:{g:.2f}:{b:.2f}"
 
 
 def has_xrandr():
