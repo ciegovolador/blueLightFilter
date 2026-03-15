@@ -7,47 +7,48 @@ from unittest.mock import patch, MagicMock
 class TestSliderLogic(unittest.TestCase):
     """Test Slider value logic without rendering."""
 
-    @patch("bluelight.gui.slider.tk.Canvas.__init__", return_value=None)
-    @patch("bluelight.gui.slider.tk.Canvas.bind")
-    def _make_slider(self, from_, to, value, mock_bind, mock_init):
+    def _make_slider(self, from_=0.0, to=1.0, value=0.5):
         from bluelight.gui.slider import Slider
+
         s = Slider.__new__(Slider)
         s.from_ = from_
         s.to = to
         s._val = value
         s.th_color = "#ff0000"
         s.on_change = None
+        s._scale = MagicMock()
+        s._fill = MagicMock()
+        s._fill.winfo_width.return_value = 200
         return s
 
     def test_get_returns_value(self):
         s = self._make_slider(0.0, 1.0, 0.5)
         self.assertEqual(s.get(), 0.5)
 
-    def test_set_clamps_above_max(self):
+    def test_set_updates_value(self):
         s = self._make_slider(0.0, 1.0, 0.5)
-        s._draw = MagicMock()
-        s._set(1.5)
-        self.assertEqual(s._val, 1.0)
+        s.set(0.8)
+        self.assertEqual(s._val, 0.8)
+        s._scale.set.assert_called_with(0.8)
 
-    def test_set_clamps_below_min(self):
-        s = self._make_slider(0.1, 1.0, 0.5)
-        s._draw = MagicMock()
-        s._set(-0.5)
-        self.assertEqual(s._val, 0.1)
-
-    def test_set_triggers_callback(self):
+    def test_set_triggers_no_callback_if_none(self):
         s = self._make_slider(0.0, 1.0, 0.5)
-        s._draw = MagicMock()
+        s.on_change = None
+        s.set(0.7)  # should not raise
+
+    def test_on_scale_triggers_callback(self):
+        s = self._make_slider(0.0, 1.0, 0.5)
         cb = MagicMock()
         s.on_change = cb
-        s._set(0.7)
-        cb.assert_called_once_with(0.7)
+        s._on_scale("0.7")
+        self.assertAlmostEqual(s._val, 0.7)
+        cb.assert_called_once()
 
-    def test_set_no_callback_if_none(self):
+    def test_on_scale_no_callback_if_none(self):
         s = self._make_slider(0.0, 1.0, 0.5)
-        s._draw = MagicMock()
         s.on_change = None
-        s._set(0.7)  # should not raise
+        s._on_scale("0.7")  # should not raise
+        self.assertAlmostEqual(s._val, 0.7)
 
 
 class TestAppCallbacks(unittest.TestCase):
@@ -56,6 +57,7 @@ class TestAppCallbacks(unittest.TestCase):
     def _make_app(self, outputs=None, has_xr=True, gamma=None):
         """Create an App instance with mocked internals."""
         from bluelight.gui.app import App
+
         app = App.__new__(App)
         app.outputs = outputs or ["HDMI-1"]
         app.has_xr = has_xr
@@ -65,6 +67,7 @@ class TestAppCallbacks(unittest.TestCase):
         app.after = MagicMock()
 
         import tkinter as tk
+
         app._selected = MagicMock()
         app._selected.get.return_value = app.outputs[0] if app.outputs else ""
         return app
@@ -79,7 +82,8 @@ class TestAppCallbacks(unittest.TestCase):
     def test_apply_all_monitors(self, mock_apply):
         app = self._make_app(
             outputs=["HDMI-1", "eDP-1"],
-            gamma={"HDMI-1": (1.0, 0.85, 0.65), "eDP-1": (1.0, 0.75, 0.50)})
+            gamma={"HDMI-1": (1.0, 0.85, 0.65), "eDP-1": (1.0, 0.75, 0.50)},
+        )
         app._selected.get.return_value = "All Monitors"
         app._apply()
         self.assertEqual(mock_apply.call_count, 2)
@@ -104,7 +108,10 @@ class TestAppCallbacks(unittest.TestCase):
         app._save_permanent()
         mock_save.assert_called_once_with(1.0, 0.85, 0.65, output="HDMI-1")
 
-    @patch("bluelight.gui.app.build_command", return_value="xrandr --output HDMI-1 --gamma 1.00:0.85:0.65")
+    @patch(
+        "bluelight.gui.app.build_command",
+        return_value="xrandr --output HDMI-1 --gamma 1.00:0.85:0.65",
+    )
     def test_copy_to_clipboard(self, mock_cmd):
         app = self._make_app()
         app.clipboard_clear = MagicMock()
@@ -117,7 +124,8 @@ class TestAppCallbacks(unittest.TestCase):
         """Selecting one monitor only applies to that monitor."""
         app = self._make_app(
             outputs=["HDMI-1", "eDP-1"],
-            gamma={"HDMI-1": (1.0, 0.85, 0.65), "eDP-1": (1.0, 0.75, 0.50)})
+            gamma={"HDMI-1": (1.0, 0.85, 0.65), "eDP-1": (1.0, 0.75, 0.50)},
+        )
         app._selected.get.return_value = "eDP-1"
         app._apply()
         mock_apply.assert_called_once_with("eDP-1", 1.0, 0.75, 0.50)
@@ -127,7 +135,8 @@ class TestAppCallbacks(unittest.TestCase):
         """All Monitors applies each monitor's own stored gamma."""
         app = self._make_app(
             outputs=["HDMI-1", "eDP-1"],
-            gamma={"HDMI-1": (1.0, 0.85, 0.65), "eDP-1": (1.0, 0.75, 0.50)})
+            gamma={"HDMI-1": (1.0, 0.85, 0.65), "eDP-1": (1.0, 0.75, 0.50)},
+        )
         app._selected.get.return_value = "All Monitors"
         app._apply()
         calls = mock_apply.call_args_list
@@ -139,7 +148,8 @@ class TestAppCallbacks(unittest.TestCase):
         """Reset applies 1.0/1.0/1.0 to all targeted monitors."""
         app = self._make_app(
             outputs=["HDMI-1", "eDP-1"],
-            gamma={"HDMI-1": (1.0, 0.85, 0.65), "eDP-1": (1.0, 0.75, 0.50)})
+            gamma={"HDMI-1": (1.0, 0.85, 0.65), "eDP-1": (1.0, 0.75, 0.50)},
+        )
         app._selected.get.return_value = "All Monitors"
         app._pbtns = [MagicMock() for _ in range(5)]
         app._sl_r = MagicMock(get=MagicMock(return_value=1.0))
@@ -155,9 +165,11 @@ class TestAppCallbacks(unittest.TestCase):
         app._cmd_lbl = MagicMock()
         app._reset()
         # Should have called apply_gamma with 1.0 for both monitors
-        reset_calls = [c for c in mock_apply.call_args_list
-                       if c == (("HDMI-1", 1.0, 1.0, 1.0),)
-                       or c == (("eDP-1", 1.0, 1.0, 1.0),)]
+        reset_calls = [
+            c
+            for c in mock_apply.call_args_list
+            if c == (("HDMI-1", 1.0, 1.0, 1.0),) or c == (("eDP-1", 1.0, 1.0, 1.0),)
+        ]
         self.assertEqual(len(reset_calls), 2)
 
     @patch("bluelight.gui.app.save_config", return_value=True)
@@ -165,13 +177,34 @@ class TestAppCallbacks(unittest.TestCase):
         """Save permanently saves each monitor's gamma individually."""
         app = self._make_app(
             outputs=["HDMI-1", "eDP-1"],
-            gamma={"HDMI-1": (1.0, 0.85, 0.65), "eDP-1": (1.0, 0.75, 0.50)})
+            gamma={"HDMI-1": (1.0, 0.85, 0.65), "eDP-1": (1.0, 0.75, 0.50)},
+        )
         app._selected.get.return_value = "All Monitors"
         app._save_permanent()
         calls = mock_save.call_args_list
         self.assertEqual(len(calls), 2)
-        self.assertEqual(calls[0], ((1.0, 0.85, 0.65,), {"output": "HDMI-1"}))
-        self.assertEqual(calls[1], ((1.0, 0.75, 0.50,), {"output": "eDP-1"}))
+        self.assertEqual(
+            calls[0],
+            (
+                (
+                    1.0,
+                    0.85,
+                    0.65,
+                ),
+                {"output": "HDMI-1"},
+            ),
+        )
+        self.assertEqual(
+            calls[1],
+            (
+                (
+                    1.0,
+                    0.75,
+                    0.50,
+                ),
+                {"output": "eDP-1"},
+            ),
+        )
 
     def test_target_outputs_single(self):
         """_target_outputs returns single monitor when one is selected."""
@@ -195,7 +228,8 @@ class TestAppCallbacks(unittest.TestCase):
         """_current_rgb returns the selected monitor's gamma."""
         app = self._make_app(
             outputs=["HDMI-1", "eDP-1"],
-            gamma={"HDMI-1": (1.0, 0.85, 0.65), "eDP-1": (1.0, 0.75, 0.50)})
+            gamma={"HDMI-1": (1.0, 0.85, 0.65), "eDP-1": (1.0, 0.75, 0.50)},
+        )
         app._selected.get.return_value = "eDP-1"
         self.assertEqual(app._current_rgb(), (1.0, 0.75, 0.50))
 
@@ -203,16 +237,24 @@ class TestAppCallbacks(unittest.TestCase):
         """_current_rgb returns first monitor's gamma for All Monitors."""
         app = self._make_app(
             outputs=["HDMI-1", "eDP-1"],
-            gamma={"HDMI-1": (1.0, 0.85, 0.65), "eDP-1": (1.0, 0.75, 0.50)})
+            gamma={"HDMI-1": (1.0, 0.85, 0.65), "eDP-1": (1.0, 0.75, 0.50)},
+        )
         app._selected.get.return_value = "All Monitors"
         self.assertEqual(app._current_rgb(), (1.0, 0.85, 0.65))
 
-    @patch("bluelight.gui.app.build_command", side_effect=lambda out, r, g, b: f"xrandr --output {out} --gamma {r:.2f}:{g:.2f}:{b:.2f}")
+    @patch(
+        "bluelight.gui.app.build_command",
+        side_effect=lambda out,
+        r,
+        g,
+        b: f"xrandr --output {out} --gamma {r:.2f}:{g:.2f}:{b:.2f}",
+    )
     def test_copy_all_monitors_multiple_commands(self, mock_cmd):
         """Copy with All Monitors produces one command per monitor."""
         app = self._make_app(
             outputs=["HDMI-1", "eDP-1"],
-            gamma={"HDMI-1": (1.0, 0.85, 0.65), "eDP-1": (1.0, 0.75, 0.50)})
+            gamma={"HDMI-1": (1.0, 0.85, 0.65), "eDP-1": (1.0, 0.75, 0.50)},
+        )
         app._selected.get.return_value = "All Monitors"
         app.clipboard_clear = MagicMock()
         app.clipboard_append = MagicMock()

@@ -1,0 +1,13 @@
+"""Color constants for Blue Light Filter."""
+
+BG = "#0d0d15"
+CARD = "#13131e"
+BORDER = "#1e1e2e"
+FG = "#e2e2ee"
+FG2 = "#77778a"
+ACCENT = "#ff9944"
+ACC2 = "#ffcc88"
+RED = "#ff5566"
+GREEN = "#44ffaa"
+BLUE = "#4499ff"
+DARK = "#080810"

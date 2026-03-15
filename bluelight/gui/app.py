@@ -1,24 +1,56 @@
 """Main GUI application for Blue Light Filter."""
 
 import tkinter as tk
-from bluelight.theme import (BG, CARD, BORDER, FG, FG2, ACCENT, ACC2,
-                              RED, GREEN, BLUE, DARK, MONO, MONO_B, MONO_S,
-                              MONO_LG, PRESETS)
-from bluelight.display import (get_connected_outputs, apply_gamma,
-                                build_command, has_xrandr)
+from bluelight.constants import (
+    BG,
+    CARD,
+    BORDER,
+    FG,
+    FG2,
+    ACCENT,
+    ACC2,
+    RED,
+    GREEN,
+    BLUE,
+    DARK,
+    FONT,
+    FONT_B,
+    FONT_S,
+    FONT_LG,
+    MONO,
+    MONO_B,
+    MONO_S,
+    PRESETS,
+)
+from bluelight.display import (
+    get_connected_outputs,
+    apply_gamma,
+    build_command,
+    has_xrandr,
+)
 from bluelight.color import gamma_to_hex, warmth_label
 from bluelight.gui.slider import Slider
-from bluelight.config import load_monitor_config, save_config
+from bluelight.config import load_settings, save_config
 
 
 ALL_MONITORS = "All Monitors"
 
 _BTN_STYLE = dict(
-    relief="flat", bd=0, cursor="hand2",
-    highlightthickness=1, highlightbackground=BORDER,
-    bg=CARD, fg=FG2,
+    relief="flat",
+    bd=0,
+    cursor="hand2",
+    highlightthickness=1,
+    highlightbackground=BORDER,
+    bg=CARD,
+    fg=FG2,
     activebackground=BORDER,
 )
+
+
+def _hover(widget, enter_bg, leave_bg):
+    """Bind hover effect to a widget."""
+    widget.bind("<Enter>", lambda e: widget.config(bg=enter_bg))
+    widget.bind("<Leave>", lambda e: widget.config(bg=leave_bg))
 
 
 class App(tk.Tk):
@@ -36,11 +68,11 @@ class App(tk.Tk):
         # Per-monitor gamma values: {output_name: (r, g, b)}
         self._monitor_gamma = {}
         for out in self.outputs:
-            saved = load_monitor_config(out)
+            saved = load_settings(out)
             self._monitor_gamma[out] = (
-                saved.get('r', 1.00),
-                saved.get('g', 0.85),
-                saved.get('b', 0.65),
+                saved.get("r", 1.00),
+                saved.get("g", 0.85),
+                saved.get("b", 0.65),
             )
 
         # Current selection
@@ -60,7 +92,6 @@ class App(tk.Tk):
         """Get RGB for the currently selected monitor."""
         sel = self._selected.get()
         if sel == ALL_MONITORS:
-            # Show the first monitor's values as representative
             if self.outputs:
                 return self._monitor_gamma[self.outputs[0]]
             return (1.00, 0.85, 0.65)
@@ -100,85 +131,120 @@ class App(tk.Tk):
     def _build_header(self):
         """Build header with title."""
         hdr = tk.Frame(self, bg=BG)
-        hdr.pack(fill="x", padx=22, pady=(20, 2))
-        tk.Label(hdr, text="BLUE LIGHT", font=MONO_LG, bg=BG, fg=FG).pack(side="left")
-        tk.Label(hdr, text=" FILTER", font=MONO_LG, bg=BG, fg=ACCENT).pack(side="left")
-        tk.Label(self, text="xrandr gamma control  -  Lubuntu / Openbox",
-                 font=MONO_S, bg=BG, fg=FG2).pack(anchor="w", padx=22)
+        hdr.pack(fill="x", padx=24, pady=(22, 2))
+        tk.Label(hdr, text="BLUE LIGHT", font=FONT_LG, bg=BG, fg=FG).pack(side="left")
+        tk.Label(hdr, text=" FILTER", font=FONT_LG, bg=BG, fg=ACCENT).pack(side="left")
+        tk.Label(
+            self,
+            text="xrandr gamma control  -  Lubuntu / Openbox",
+            font=FONT_S,
+            bg=BG,
+            fg=FG2,
+        ).pack(anchor="w", padx=24)
 
     def _build_preview(self):
         """Build color preview card."""
         pc = self._card()
         pi = tk.Frame(pc, bg=CARD)
-        pi.pack(fill="x", padx=16, pady=14)
+        pi.pack(fill="x", padx=18, pady=16)
 
-        self.swatch = tk.Canvas(pi, width=54, height=54, bg=CARD,
-                                highlightthickness=0, bd=0)
-        self.swatch.pack(side="left", padx=(0, 14))
-        self._orb = self.swatch.create_oval(3, 3, 51, 51, fill="#ffcc88", outline="")
+        self.swatch = tk.Canvas(
+            pi, width=64, height=64, bg=CARD, highlightthickness=0, bd=0
+        )
+        self.swatch.pack(side="left", padx=(0, 16))
+        self._orb = self.swatch.create_oval(3, 3, 61, 61, fill="#ffcc88", outline="")
 
         mid = tk.Frame(pi, bg=CARD)
         mid.pack(side="left", fill="x", expand=True)
-        tk.Label(mid, text="Screen Preview", font=MONO_B, bg=CARD, fg=FG).pack(anchor="w")
+        tk.Label(mid, text="Screen Preview", font=FONT_B, bg=CARD, fg=FG).pack(
+            anchor="w"
+        )
         self.vals_lbl = tk.Label(mid, text="", font=MONO_S, bg=CARD, fg=FG2)
         self.vals_lbl.pack(anchor="w")
 
-        self.warm_lbl = tk.Label(pi, text="", font=MONO_B, bg=CARD, fg=ACCENT)
+        self.warm_lbl = tk.Label(pi, text="", font=FONT_B, bg=CARD, fg=ACCENT)
         self.warm_lbl.pack(side="right")
 
     def _build_display_info(self):
         """Build display detection info with monitor selector."""
         df = tk.Frame(self, bg=BG)
-        df.pack(fill="x", padx=22, pady=(4, 0))
+        df.pack(fill="x", padx=24, pady=(4, 0))
 
         if self.outputs:
             dcol = GREEN
-            tk.Label(df, text=f"Displays: {len(self.outputs)} connected",
-                     font=MONO_S, bg=BG, fg=dcol).pack(side="left")
+            tk.Label(
+                df,
+                text=f"Displays: {len(self.outputs)} connected",
+                font=FONT_S,
+                bg=BG,
+                fg=dcol,
+            ).pack(side="left")
 
-            # Monitor selector dropdown
             choices = list(self.outputs)
             if len(choices) > 1:
                 choices.append(ALL_MONITORS)
 
             sel_frame = tk.Frame(df, bg=BG)
             sel_frame.pack(side="right")
-            tk.Label(sel_frame, text="Target: ", font=MONO_S,
-                     bg=BG, fg=FG2).pack(side="left")
+            tk.Label(sel_frame, text="Target: ", font=FONT_S, bg=BG, fg=FG2).pack(
+                side="left"
+            )
             self._monitor_menu = tk.OptionMenu(
-                sel_frame, self._selected, *choices,
-                command=self._monitor_changed)
+                sel_frame, self._selected, *choices, command=self._monitor_changed
+            )
             self._monitor_menu.config(
-                font=MONO_S, bg=CARD, fg=FG, activebackground=BORDER,
-                activeforeground=FG, highlightthickness=1,
-                highlightbackground=BORDER, relief="flat", bd=0)
+                font=FONT_S,
+                bg=CARD,
+                fg=FG,
+                activebackground=BORDER,
+                activeforeground=FG,
+                highlightthickness=1,
+                highlightbackground=BORDER,
+                relief="flat",
+                bd=0,
+            )
             self._monitor_menu["menu"].config(
-                font=MONO_S, bg=CARD, fg=FG,
-                activebackground=ACCENT, activeforeground="#1a0900")
+                font=FONT_S,
+                bg=CARD,
+                fg=FG,
+                activebackground=ACCENT,
+                activeforeground="#1a0900",
+            )
             self._monitor_menu.pack(side="left")
         else:
-            tk.Label(df, text="  No display detected",
-                     font=MONO_S, bg=BG, fg=RED).pack(side="left")
+            tk.Label(df, text="  No display detected", font=FONT_S, bg=BG, fg=RED).pack(
+                side="left"
+            )
 
     def _build_presets(self):
         """Build preset buttons."""
-        tk.Label(self, text="PRESETS", font=MONO_S, bg=BG, fg=FG2
-                 ).pack(anchor="w", padx=22)
+        tk.Label(self, text="PRESETS", font=FONT_S, bg=BG, fg=FG2).pack(
+            anchor="w", padx=24
+        )
         pf = tk.Frame(self, bg=BG)
-        pf.pack(fill="x", padx=22, pady=(6, 10))
+        pf.pack(fill="x", padx=24, pady=(6, 10))
         self._pbtns = []
         for i, (name, r, g, b) in enumerate(PRESETS):
-            btn = tk.Button(pf, text=name, font=MONO_S, **_BTN_STYLE,
-                            activeforeground=ACC2, padx=8, pady=7,
-                            command=lambda r=r, g=g, b=b, i=i: self._preset(r, g, b, i))
+            btn = tk.Button(
+                pf,
+                text=name,
+                font=FONT_S,
+                **_BTN_STYLE,
+                activeforeground=ACC2,
+                padx=10,
+                pady=8,
+                command=lambda r=r, g=g, b=b, i=i: self._preset(r, g, b, i),
+            )
             btn.grid(row=0, column=i, padx=3, sticky="ew")
             pf.columnconfigure(i, weight=1)
+            _hover(btn, BORDER, CARD)
             self._pbtns.append(btn)
 
     def _build_sliders(self):
         """Build RGB slider controls."""
-        tk.Label(self, text="MANUAL CONTROL", font=MONO_S, bg=BG, fg=FG2
-                 ).pack(anchor="w", padx=22)
+        tk.Label(self, text="MANUAL CONTROL", font=FONT_S, bg=BG, fg=FG2).pack(
+            anchor="w", padx=24
+        )
         sc = self._card()
         self._sl_r, self._rl = self._slider_row(sc, "RED", RED, self._r)
         self._sl_g, self._gl = self._slider_row(sc, "GREEN", GREEN, self._g)
@@ -186,53 +252,86 @@ class App(tk.Tk):
 
     def _build_command_box(self):
         """Build command display box."""
-        tk.Label(self, text="GENERATED COMMAND", font=MONO_S, bg=BG, fg=FG2
-                 ).pack(anchor="w", padx=22)
+        tk.Label(self, text="GENERATED COMMAND", font=FONT_S, bg=BG, fg=FG2).pack(
+            anchor="w", padx=24
+        )
         cc = tk.Frame(self, bg=DARK, highlightthickness=1, highlightbackground=BORDER)
-        cc.pack(fill="x", padx=22, pady=(6, 4))
+        cc.pack(fill="x", padx=24, pady=(6, 4))
         ci = tk.Frame(cc, bg=DARK)
-        ci.pack(fill="x", padx=14, pady=10)
-        tk.Label(ci, text="$ ", font=MONO_B, bg=DARK, fg=ACCENT).pack(side="left", anchor="nw")
-        self._cmd_lbl = tk.Label(ci, text="", font=MONO_S, bg=DARK,
-                                  fg="#aaffcc", wraplength=400, justify="left")
+        ci.pack(fill="x", padx=16, pady=12)
+        tk.Label(ci, text="$ ", font=MONO_B, bg=DARK, fg=ACCENT).pack(
+            side="left", anchor="nw"
+        )
+        self._cmd_lbl = tk.Label(
+            ci,
+            text="",
+            font=MONO_S,
+            bg=DARK,
+            fg="#aaffcc",
+            wraplength=400,
+            justify="left",
+        )
         self._cmd_lbl.pack(side="left", fill="x", expand=True)
 
     def _build_buttons(self):
         """Build action buttons."""
         bf = tk.Frame(self, bg=BG)
-        bf.pack(fill="x", padx=22, pady=(10, 6))
-        self._btn(bf, "  Apply Now", self._apply, primary=True
-                  ).pack(side="left", fill="x", expand=True, padx=(0, 6))
-        self._btn(bf, "Save Permanently", self._save_permanent
-                  ).pack(side="left", padx=(0, 6))
+        bf.pack(fill="x", padx=24, pady=(12, 6))
+        self._btn(bf, "  Apply Now", self._apply, primary=True).pack(
+            side="left", fill="x", expand=True, padx=(0, 6)
+        )
+        self._btn(bf, "Save Permanently", self._save_permanent).pack(
+            side="left", padx=(0, 6)
+        )
         self._btn(bf, "Reset", self._reset).pack(side="left", padx=(0, 6))
         self._btn(bf, "Copy CMD", self._copy).pack(side="left")
 
     def _btn(self, parent, text, command, primary=False):
-        """Create a styled button."""
+        """Create a styled button with hover effects."""
         if primary:
-            return tk.Button(parent, text=text, font=MONO_B,
-                             bg=ACCENT, fg="#1a0900",
-                             activebackground=ACC2, activeforeground="#1a0900",
-                             relief="flat", bd=0, padx=18, pady=10,
-                             cursor="hand2", command=command)
-        return tk.Button(parent, text=text, font=MONO_B, **_BTN_STYLE,
-                         activeforeground=FG, padx=14, pady=10,
-                         command=command)
+            b = tk.Button(
+                parent,
+                text=text,
+                font=FONT_B,
+                bg=ACCENT,
+                fg="#1a0900",
+                activebackground=ACC2,
+                activeforeground="#1a0900",
+                relief="flat",
+                bd=0,
+                padx=18,
+                pady=10,
+                cursor="hand2",
+                command=command,
+            )
+            _hover(b, ACC2, ACCENT)
+        else:
+            b = tk.Button(
+                parent,
+                text=text,
+                font=FONT_B,
+                **_BTN_STYLE,
+                activeforeground=FG,
+                padx=14,
+                pady=10,
+                command=command,
+            )
+            _hover(b, BORDER, CARD)
+        return b
 
     def _build_status(self):
         """Build status message label."""
-        self._status = tk.Label(self, text="", font=MONO_S, bg=BG, fg=GREEN)
-        self._status.pack(pady=(4, 16))
+        self._status = tk.Label(self, text="", font=FONT_S, bg=BG, fg=GREEN)
+        self._status.pack(pady=(4, 18))
 
     def _sep(self):
         """Draw a separator line."""
-        tk.Frame(self, bg=BORDER, height=1).pack(fill="x", padx=22, pady=8)
+        tk.Frame(self, bg=BORDER, height=1).pack(fill="x", padx=24, pady=10)
 
     def _card(self):
         """Create a card container."""
         f = tk.Frame(self, bg=CARD, highlightthickness=1, highlightbackground=BORDER)
-        f.pack(fill="x", padx=22, pady=(4, 4))
+        f.pack(fill="x", padx=24, pady=(4, 4))
         return f
 
     def _slider_row(self, parent, label, color, init):
@@ -242,16 +341,23 @@ class App(tk.Tk):
             tuple: (Slider widget, value label widget)
         """
         row = tk.Frame(parent, bg=CARD)
-        row.pack(fill="x", padx=16, pady=(10, 4))
+        row.pack(fill="x", padx=18, pady=(10, 4))
         top = tk.Frame(row, bg=CARD)
         top.pack(fill="x")
-        tk.Label(top, text=label, font=MONO_B, bg=CARD,
-                 fg=color, width=7, anchor="w").pack(side="left")
+        tk.Label(
+            top, text=label, font=FONT_B, bg=CARD, fg=color, width=7, anchor="w"
+        ).pack(side="left")
         val_lbl = tk.Label(top, text=f"{init:.2f}", font=MONO, bg=CARD, fg=FG2)
         val_lbl.pack(side="right")
-        sl = Slider(row, from_=0.10, to=1.00, value=init,
-                    thumb_color=color, bg=CARD,
-                    on_change=lambda v, lbl=val_lbl: self._slider_moved(lbl, v))
+        sl = Slider(
+            row,
+            from_=0.10,
+            to=1.00,
+            value=init,
+            thumb_color=color,
+            bg=CARD,
+            on_change=lambda v, lbl=val_lbl: self._slider_moved(lbl, v),
+        )
         sl.pack(fill="x", pady=(6, 6))
         return sl, val_lbl
 
@@ -279,7 +385,6 @@ class App(tk.Tk):
         self._r = self._sl_r.get()
         self._g = self._sl_g.get()
         self._b = self._sl_b.get()
-        # Store values for target monitors
         for out in self._target_outputs():
             self._monitor_gamma[out] = (self._r, self._g, self._b)
         self._highlight_preset(-1)
@@ -309,8 +414,10 @@ class App(tk.Tk):
         for i, btn in enumerate(self._pbtns):
             if i == idx:
                 btn.config(bg=ACCENT, fg="#1a0900", highlightbackground=ACCENT)
+                _hover(btn, ACC2, ACCENT)
             else:
                 btn.config(bg=CARD, fg=FG2, highlightbackground=BORDER)
+                _hover(btn, BORDER, CARD)
 
     def _apply(self):
         """Apply filter to target displays."""
