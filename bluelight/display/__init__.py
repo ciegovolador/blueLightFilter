@@ -5,19 +5,30 @@ import shutil
 
 
 def get_connected_output():
-    """Detect the connected display output name.
+    """Detect the first connected display output name.
 
     Returns:
         str or None: Output name (e.g., "HDMI-1") or None if not found.
     """
+    outputs = get_connected_outputs()
+    return outputs[0] if outputs else None
+
+
+def get_connected_outputs():
+    """Detect all connected display output names.
+
+    Returns:
+        list[str]: Output names (e.g., ["HDMI-1", "eDP-1"]), empty if none found.
+    """
+    outputs = []
     try:
         out = subprocess.check_output(["xrandr"], text=True, stderr=subprocess.DEVNULL)
         for line in out.splitlines():
             if " connected" in line:
-                return line.split()[0]
+                outputs.append(line.split()[0])
     except Exception:
         pass
-    return None
+    return outputs
 
 
 def apply_gamma(output, r, g, b):
