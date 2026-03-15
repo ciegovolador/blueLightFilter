@@ -4,10 +4,14 @@ import tkinter as tk
 from bluelight.theme import (BG, CARD, BORDER, FG, FG2, ACCENT, ACC2,
                               RED, GREEN, BLUE, DARK, MONO, MONO_B, MONO_S,
                               MONO_LG, PRESETS)
-from bluelight.display import get_connected_output, apply_gamma, build_command, has_xrandr
+from bluelight.display import (get_connected_outputs, apply_gamma,
+                                build_command, has_xrandr)
 from bluelight.color import gamma_to_hex, warmth_label
 from bluelight.gui.slider import Slider
-from bluelight.config import load_config, save_config
+from bluelight.config import load_monitor_config, save_config
+
+
+ALL_MONITORS = "All Monitors"
 
 
 class App(tk.Tk):
@@ -19,20 +23,48 @@ class App(tk.Tk):
         self.configure(bg=BG)
         self.resizable(False, False)
 
-        self.output = get_connected_output()
+        self.outputs = get_connected_outputs()
         self.has_xr = has_xrandr()
 
-        # Load saved settings or use defaults
-        saved = load_config()
-        self._r = saved.get('r', 1.00)
-        self._g = saved.get('g', 0.85)
-        self._b = saved.get('b', 0.65)
+        # Per-monitor gamma values: {output_name: (r, g, b)}
+        self._monitor_gamma = {}
+        for out in self.outputs:
+            saved = load_monitor_config(out)
+            self._monitor_gamma[out] = (
+                saved.get('r', 1.00),
+                saved.get('g', 0.85),
+                saved.get('b', 0.65),
+            )
+
+        # Current selection
+        self._selected = tk.StringVar(value=self.outputs[0] if self.outputs else "")
+        r, g, b = self._current_rgb()
+        self._r, self._g, self._b = r, g, b
 
         self._build()
 
         # Auto-apply saved settings on startup
-        if saved and self.has_xr and self.output:
-            apply_gamma(self.output, self._r, self._g, self._b)
+        if self.has_xr:
+            for out in self.outputs:
+                r, g, b = self._monitor_gamma[out]
+                apply_gamma(out, r, g, b)
+
+    def _current_rgb(self):
+        """Get RGB for the currently selected monitor."""
+        sel = self._selected.get()
+        if sel == ALL_MONITORS:
+            # Show the first monitor's values as representative
+            if self.outputs:
+                return self._monitor_gamma[self.outputs[0]]
+            return (1.00, 0.85, 0.65)
+        return self._monitor_gamma.get(sel, (1.00, 0.85, 0.65))
+
+    def _target_outputs(self):
+        """Get the list of outputs affected by current selection."""
+        sel = self._selected.get()
+        if sel == ALL_MONITORS:
+            return list(self.outputs)
+        return [sel] if sel else []
 
     # ── UI Construction ───────────────────────────────────────────────────────
 
@@ -82,11 +114,38 @@ class App(tk.Tk):
         self.warm_lbl.pack(side="right")
 
     def _build_display_info(self):
-        """Build display detection info row."""
-        dtxt = f"Display: {self.output}" if self.output else "  No display detected"
-        dcol = GREEN if self.output else RED
-        tk.Label(self, text=dtxt, font=MONO_S, bg=BG, fg=dcol
-                 ).pack(anchor="w", padx=22, pady=(4, 0))
+        """Build display detection info with monitor selector."""
+        df = tk.Frame(self, bg=BG)
+        df.pack(fill="x", padx=22, pady=(4, 0))
+
+        if self.outputs:
+            dcol = GREEN
+            tk.Label(df, text=f"Displays: {len(self.outputs)} connected",
+                     font=MONO_S, bg=BG, fg=dcol).pack(side="left")
+
+            # Monitor selector dropdown
+            choices = list(self.outputs)
+            if len(choices) > 1:
+                choices.append(ALL_MONITORS)
+
+            sel_frame = tk.Frame(df, bg=BG)
+            sel_frame.pack(side="right")
+            tk.Label(sel_frame, text="Target: ", font=MONO_S,
+                     bg=BG, fg=FG2).pack(side="left")
+            self._monitor_menu = tk.OptionMenu(
+                sel_frame, self._selected, *choices,
+                command=self._monitor_changed)
+            self._monitor_menu.config(
+                font=MONO_S, bg=CARD, fg=FG, activebackground=BORDER,
+                activeforeground=FG, highlightthickness=1,
+                highlightbackground=BORDER, relief="flat", bd=0)
+            self._monitor_menu["menu"].config(
+                font=MONO_S, bg=CARD, fg=FG,
+                activebackground=ACCENT, activeforeground="#1a0900")
+            self._monitor_menu.pack(side="left")
+        else:
+            tk.Label(df, text="  No display detected",
+                     font=MONO_S, bg=BG, fg=RED).pack(side="left")
 
     def _build_presets(self):
         """Build preset buttons."""
@@ -192,12 +251,28 @@ class App(tk.Tk):
 
     # ── Callbacks ─────────────────────────────────────────────────────────────
 
+    def _monitor_changed(self, *_):
+        """Handle monitor selection change."""
+        r, g, b = self._current_rgb()
+        self._r, self._g, self._b = r, g, b
+        self._sl_r.set(r)
+        self._sl_g.set(g)
+        self._sl_b.set(b)
+        self._rl.config(text=f"{r:.2f}")
+        self._gl.config(text=f"{g:.2f}")
+        self._bl.config(text=f"{b:.2f}")
+        self._highlight_preset(-1)
+        self._refresh()
+
     def _slider_moved(self, lbl, val):
         """Handle slider movement."""
         lbl.config(text=f"{val:.2f}")
         self._r = self._sl_r.get()
         self._g = self._sl_g.get()
         self._b = self._sl_b.get()
+        # Store values for target monitors
+        for out in self._target_outputs():
+            self._monitor_gamma[out] = (self._r, self._g, self._b)
         self._highlight_preset(-1)
         self._refresh()
 
@@ -207,8 +282,12 @@ class App(tk.Tk):
         self.swatch.itemconfig(self._orb, fill=gamma_to_hex(r, g, b))
         self.vals_lbl.config(text=f"R: {r:.2f}  G: {g:.2f}  B: {b:.2f}")
         self.warm_lbl.config(text=warmth_label(b))
-        out = self.output or "<output>"
-        self._cmd_lbl.config(text=build_command(out, r, g, b))
+        targets = self._target_outputs()
+        if targets:
+            cmds = [build_command(out, r, g, b) for out in targets]
+            self._cmd_lbl.config(text="\n".join(cmds))
+        else:
+            self._cmd_lbl.config(text=build_command("<output>", r, g, b))
 
     def _preset(self, r, g, b, idx):
         """Apply a preset and highlight its button."""
@@ -219,6 +298,8 @@ class App(tk.Tk):
         self._rl.config(text=f"{r:.2f}")
         self._gl.config(text=f"{g:.2f}")
         self._bl.config(text=f"{b:.2f}")
+        for out in self._target_outputs():
+            self._monitor_gamma[out] = (r, g, b)
         self._highlight_preset(idx)
         self._refresh()
 
@@ -231,33 +312,60 @@ class App(tk.Tk):
                 btn.config(bg=CARD, fg=FG2, highlightbackground=BORDER)
 
     def _apply(self):
-        """Apply filter to connected display."""
+        """Apply filter to target displays."""
         if not self.has_xr:
             self._flash("  xrandr not found — install x11-xserver-utils", RED)
             return
-        if not self.output:
+        targets = self._target_outputs()
+        if not targets:
             self._flash("  No connected display detected", RED)
             return
-        apply_gamma(self.output, self._r, self._g, self._b)
-        self._flash("  Filter applied to display!")
+        for out in targets:
+            r, g, b = self._monitor_gamma[out]
+            apply_gamma(out, r, g, b)
+        n = len(targets)
+        label = f"{n} display{'s' if n > 1 else ''}"
+        self._flash(f"  Filter applied to {label}!")
 
     def _reset(self):
-        """Reset display to normal (no filter)."""
+        """Reset target displays to normal (no filter)."""
         self._preset(1.0, 1.0, 1.0, 0)
-        if self.has_xr and self.output:
-            apply_gamma(self.output, 1.0, 1.0, 1.0)
+        if self.has_xr:
+            for out in self._target_outputs():
+                apply_gamma(out, 1.0, 1.0, 1.0)
             self._flash("  Display reset to normal")
 
     def _copy(self):
-        """Copy generated command to clipboard."""
-        cmd = build_command(self.output or "<output>", self._r, self._g, self._b)
+        """Copy generated command(s) to clipboard."""
+        targets = self._target_outputs()
+        if targets:
+            cmds = []
+            for out in targets:
+                r, g, b = self._monitor_gamma[out]
+                cmds.append(build_command(out, r, g, b))
+            text = "\n".join(cmds)
+        else:
+            text = build_command("<output>", self._r, self._g, self._b)
         self.clipboard_clear()
-        self.clipboard_append(cmd)
+        self.clipboard_append(text)
         self._flash("  Command copied to clipboard!")
 
     def _save_permanent(self):
-        """Save current gamma settings permanently."""
-        if save_config(self._r, self._g, self._b):
+        """Save current gamma settings permanently (per-monitor)."""
+        targets = self._target_outputs()
+        if not targets:
+            if save_config(self._r, self._g, self._b):
+                self._flash("  Settings saved permanently!", GREEN)
+            else:
+                self._flash("  Failed to save settings", RED)
+            return
+
+        ok = True
+        for out in targets:
+            r, g, b = self._monitor_gamma[out]
+            if not save_config(r, g, b, output=out):
+                ok = False
+        if ok:
             self._flash("  Settings saved permanently!", GREEN)
         else:
             self._flash("  Failed to save settings", RED)
