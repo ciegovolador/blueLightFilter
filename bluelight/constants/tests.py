@@ -1,16 +1,30 @@
-"""Tests for bluelight.theme."""
+"""Tests for bluelight.constants."""
 
 import unittest
-from bluelight.theme import (
-    BG, CARD, BORDER, FG, FG2, ACCENT, ACC2,
-    RED, GREEN, BLUE, DARK,
-    MONO, MONO_B, MONO_S, MONO_LG,
+from bluelight.constants import (
+    BG,
+    CARD,
+    BORDER,
+    FG,
+    FG2,
+    ACCENT,
+    ACC2,
+    RED,
+    GREEN,
+    BLUE,
+    DARK,
+    FONT,
+    FONT_B,
+    FONT_S,
+    FONT_LG,
+    MONO,
+    MONO_B,
+    MONO_S,
     PRESETS,
 )
 
 
 class TestColors(unittest.TestCase):
-
     def test_all_colors_are_hex(self):
         for color in (BG, CARD, BORDER, FG, FG2, ACCENT, ACC2, RED, GREEN, BLUE, DARK):
             self.assertTrue(color.startswith("#"), f"{color} is not hex")
@@ -22,19 +36,21 @@ class TestColors(unittest.TestCase):
 
 
 class TestFonts(unittest.TestCase):
-
-    def test_mono_is_tuple(self):
-        for font in (MONO, MONO_B, MONO_S, MONO_LG):
+    def test_all_fonts_are_tuples(self):
+        for font in (FONT, FONT_B, FONT_S, FONT_LG, MONO, MONO_B, MONO_S):
             self.assertIsInstance(font, tuple)
             self.assertGreaterEqual(len(font), 2)
 
+    def test_proportional_family(self):
+        for font in (FONT, FONT_B, FONT_S, FONT_LG):
+            self.assertEqual(font[0], "TkDefaultFont")
+
     def test_mono_family(self):
-        for font in (MONO, MONO_B, MONO_S, MONO_LG):
+        for font in (MONO, MONO_B, MONO_S):
             self.assertEqual(font[0], "Courier New")
 
 
 class TestPresets(unittest.TestCase):
-
     def test_presets_is_list(self):
         self.assertIsInstance(PRESETS, list)
         self.assertGreater(len(PRESETS), 0)
