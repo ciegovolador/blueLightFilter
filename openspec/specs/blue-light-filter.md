@@ -85,6 +85,8 @@ Temporary flash messages (2.8s) at bottom of window:
 
 ### 7. Persistent Configuration
 
+The config module normalizes legacy single-monitor format into multi-monitor format at load time, using shared `_normalize_rgb()` and `_load_json_file()` helpers internally. External behavior (load/save results) remains identical.
+
 **Multi-monitor format** (current):
 ```json
 {

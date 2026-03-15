@@ -3,21 +3,8 @@
 import unittest
 from unittest.mock import patch
 from bluelight.display import (
-    gamma_string, build_command, get_connected_output, get_connected_outputs,
-    has_xrandr, apply_gamma
+    build_command, get_connected_outputs, has_xrandr, apply_gamma
 )
-
-
-class TestGammaString(unittest.TestCase):
-
-    def test_format(self):
-        self.assertEqual(gamma_string(1.0, 0.85, 0.65), "1.00:0.85:0.65")
-
-    def test_two_decimal_places(self):
-        self.assertEqual(gamma_string(0.999, 0.1, 0.0), "1.00:0.10:0.00")
-
-    def test_all_ones(self):
-        self.assertEqual(gamma_string(1.0, 1.0, 1.0), "1.00:1.00:1.00")
 
 
 class TestBuildCommand(unittest.TestCase):
@@ -29,26 +16,6 @@ class TestBuildCommand(unittest.TestCase):
     def test_different_output(self):
         result = build_command("eDP-1", 1.0, 1.0, 1.0)
         self.assertEqual(result, "xrandr --output eDP-1 --gamma 1.00:1.00:1.00")
-
-
-class TestGetConnectedOutput(unittest.TestCase):
-
-    @patch("bluelight.display.subprocess.check_output")
-    def test_detects_connected_display(self, mock_out):
-        mock_out.return_value = (
-            "HDMI-1 connected 1920x1080+0+0\n"
-            "VGA-1 disconnected\n"
-        )
-        self.assertEqual(get_connected_output(), "HDMI-1")
-
-    @patch("bluelight.display.subprocess.check_output")
-    def test_no_connected_display(self, mock_out):
-        mock_out.return_value = "VGA-1 disconnected\n"
-        self.assertIsNone(get_connected_output())
-
-    @patch("bluelight.display.subprocess.check_output", side_effect=FileNotFoundError)
-    def test_xrandr_missing(self, mock_out):
-        self.assertIsNone(get_connected_output())
 
 
 class TestGetConnectedOutputs(unittest.TestCase):
@@ -93,16 +60,6 @@ class TestGetConnectedOutputs(unittest.TestCase):
     @patch("bluelight.display.subprocess.check_output", side_effect=FileNotFoundError)
     def test_xrandr_missing(self, mock_out):
         self.assertEqual(get_connected_outputs(), [])
-
-    @patch("bluelight.display.subprocess.check_output")
-    def test_get_connected_output_returns_first(self, mock_out):
-        """get_connected_output() should return only the first display."""
-        mock_out.return_value = (
-            "HDMI-1 connected 1920x1080+0+0\n"
-            "eDP-1 connected 1366x768+1920+0\n"
-        )
-        self.assertEqual(get_connected_output(), "HDMI-1")
-
 
 class TestHasXrandr(unittest.TestCase):
 

@@ -13,6 +13,13 @@ from bluelight.config import load_monitor_config, save_config
 
 ALL_MONITORS = "All Monitors"
 
+_BTN_STYLE = dict(
+    relief="flat", bd=0, cursor="hand2",
+    highlightthickness=1, highlightbackground=BORDER,
+    bg=CARD, fg=FG2,
+    activebackground=BORDER,
+)
+
 
 class App(tk.Tk):
     """Blue Light Filter GUI Application."""
@@ -65,6 +72,12 @@ class App(tk.Tk):
         if sel == ALL_MONITORS:
             return list(self.outputs)
         return [sel] if sel else []
+
+    def _iter_target_gamma(self):
+        """Yield (output, r, g, b) for each current target."""
+        for out in self._target_outputs():
+            r, g, b = self._monitor_gamma[out]
+            yield out, r, g, b
 
     # ── UI Construction ───────────────────────────────────────────────────────
 
@@ -155,12 +168,8 @@ class App(tk.Tk):
         pf.pack(fill="x", padx=22, pady=(6, 10))
         self._pbtns = []
         for i, (name, r, g, b) in enumerate(PRESETS):
-            btn = tk.Button(pf, text=name, font=MONO_S,
-                            bg=CARD, fg=FG2,
-                            activebackground=BORDER, activeforeground=ACC2,
-                            relief="flat", bd=0,
-                            highlightthickness=1, highlightbackground=BORDER,
-                            padx=8, pady=7, cursor="hand2",
+            btn = tk.Button(pf, text=name, font=MONO_S, **_BTN_STYLE,
+                            activeforeground=ACC2, padx=8, pady=7,
                             command=lambda r=r, g=g, b=b, i=i: self._preset(r, g, b, i))
             btn.grid(row=0, column=i, padx=3, sticky="ew")
             pf.columnconfigure(i, weight=1)
@@ -207,12 +216,9 @@ class App(tk.Tk):
                              activebackground=ACC2, activeforeground="#1a0900",
                              relief="flat", bd=0, padx=18, pady=10,
                              cursor="hand2", command=command)
-        return tk.Button(parent, text=text, font=MONO_B,
-                         bg=CARD, fg=FG2,
-                         activebackground=BORDER, activeforeground=FG,
-                         relief="flat", bd=0,
-                         highlightthickness=1, highlightbackground=BORDER,
-                         padx=14, pady=10, cursor="hand2", command=command)
+        return tk.Button(parent, text=text, font=MONO_B, **_BTN_STYLE,
+                         activeforeground=FG, padx=14, pady=10,
+                         command=command)
 
     def _build_status(self):
         """Build status message label."""
@@ -251,9 +257,8 @@ class App(tk.Tk):
 
     # ── Callbacks ─────────────────────────────────────────────────────────────
 
-    def _monitor_changed(self, *_):
-        """Handle monitor selection change."""
-        r, g, b = self._current_rgb()
+    def _set_rgb(self, r, g, b, preset_idx=-1):
+        """Update internal state, sliders, labels, and preset highlighting."""
         self._r, self._g, self._b = r, g, b
         self._sl_r.set(r)
         self._sl_g.set(g)
@@ -261,8 +266,12 @@ class App(tk.Tk):
         self._rl.config(text=f"{r:.2f}")
         self._gl.config(text=f"{g:.2f}")
         self._bl.config(text=f"{b:.2f}")
-        self._highlight_preset(-1)
+        self._highlight_preset(preset_idx)
         self._refresh()
+
+    def _monitor_changed(self, *_):
+        """Handle monitor selection change."""
+        self._set_rgb(*self._current_rgb())
 
     def _slider_moved(self, lbl, val):
         """Handle slider movement."""
@@ -291,17 +300,9 @@ class App(tk.Tk):
 
     def _preset(self, r, g, b, idx):
         """Apply a preset and highlight its button."""
-        self._r, self._g, self._b = r, g, b
-        self._sl_r.set(r)
-        self._sl_g.set(g)
-        self._sl_b.set(b)
-        self._rl.config(text=f"{r:.2f}")
-        self._gl.config(text=f"{g:.2f}")
-        self._bl.config(text=f"{b:.2f}")
         for out in self._target_outputs():
             self._monitor_gamma[out] = (r, g, b)
-        self._highlight_preset(idx)
-        self._refresh()
+        self._set_rgb(r, g, b, preset_idx=idx)
 
     def _highlight_preset(self, idx):
         """Highlight the active preset button, reset others."""
@@ -316,14 +317,13 @@ class App(tk.Tk):
         if not self.has_xr:
             self._flash("  xrandr not found — install x11-xserver-utils", RED)
             return
-        targets = self._target_outputs()
-        if not targets:
+        items = list(self._iter_target_gamma())
+        if not items:
             self._flash("  No connected display detected", RED)
             return
-        for out in targets:
-            r, g, b = self._monitor_gamma[out]
+        for out, r, g, b in items:
             apply_gamma(out, r, g, b)
-        n = len(targets)
+        n = len(items)
         label = f"{n} display{'s' if n > 1 else ''}"
         self._flash(f"  Filter applied to {label}!")
 
@@ -337,13 +337,9 @@ class App(tk.Tk):
 
     def _copy(self):
         """Copy generated command(s) to clipboard."""
-        targets = self._target_outputs()
-        if targets:
-            cmds = []
-            for out in targets:
-                r, g, b = self._monitor_gamma[out]
-                cmds.append(build_command(out, r, g, b))
-            text = "\n".join(cmds)
+        items = list(self._iter_target_gamma())
+        if items:
+            text = "\n".join(build_command(out, r, g, b) for out, r, g, b in items)
         else:
             text = build_command("<output>", self._r, self._g, self._b)
         self.clipboard_clear()
@@ -352,19 +348,15 @@ class App(tk.Tk):
 
     def _save_permanent(self):
         """Save current gamma settings permanently (per-monitor)."""
-        targets = self._target_outputs()
-        if not targets:
+        items = list(self._iter_target_gamma())
+        if not items:
             if save_config(self._r, self._g, self._b):
                 self._flash("  Settings saved permanently!", GREEN)
             else:
                 self._flash("  Failed to save settings", RED)
             return
 
-        ok = True
-        for out in targets:
-            r, g, b = self._monitor_gamma[out]
-            if not save_config(r, g, b, output=out):
-                ok = False
+        ok = all(save_config(r, g, b, output=out) for out, r, g, b in items)
         if ok:
             self._flash("  Settings saved permanently!", GREEN)
         else:
